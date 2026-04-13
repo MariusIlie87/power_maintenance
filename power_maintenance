@@ -45,10 +45,26 @@ IFS=', ' read -ra RACK_ARRAY <<< "$RACK_INPUT"
 VALID_RACKS=()
 for rack in "${RACK_ARRAY[@]}"; do
     rack=$(echo "$rack" | xargs) # elimină spații
-    if [[ ${#rack} -ne 4 || ! "$rack" =~ ^[0-9]{4}$ ]]; then
-        echo "Rack number may be wrong: '$rack'. Must be exactly 4 digits."
+
+    # check if it is numeric
+    if [[ ! "$rack" =~ ^[0-9]+$ ]]; then
+        echo "Invalid rack value: '$rack'. Must contain only digits."
         exit 1
     fi
+
+    # check if it has 4 numbers , and add a 0
+    if [[ ${#rack} -lt 4 ]]; then
+        original="$rack"
+        rack=$(printf "%04d" "$rack")
+        echo "Warning: rack '$original' was truncated/padded to '$rack'"
+    fi
+
+    # check if it has more than 4 numbers > error
+    if [[ ${#rack} -gt 4 ]]; then
+        echo "Invalid rack value: '$rack'. Must be max 4 digits."
+        exit 1
+    fi
+
     VALID_RACKS+=("$rack")
 done
 
@@ -94,105 +110,3 @@ echo ""
 echo "To view the silence run the below command:"
 echo "silencer view -r $ZONE "
 
-mailie@Ilies-MacBook-Pro /usr/local/bin $ cat power_maintenance.sh
-cat: power_maintenance.sh: No such file or directory
-mailie@Ilies-MacBook-Pro /usr/local/bin $ cat power_maintenance.sh
-cat: power_maintenance.sh: No such file or directory
-mailie@Ilies-MacBook-Pro /usr/local/bin $ cat power_maintenance.py
-cat: power_maintenance.py: No such file or directory
-mailie@Ilies-MacBook-Pro /usr/local/bin $ cat power_maintenance
-#!/bin/bash
-
-# Verificare python3 și dateutil
-if ! command -v python3 &> /dev/null; then
-    echo "Python3 is required but not installed. Exiting."
-    exit 1
-fi
-
-if ! python3 -c "import dateutil" &> /dev/null; then
-    echo "Module 'dateutil' not found. Install it with: pip3 install python-dateutil"
-    exit 1
-fi
-
-# Funcție care convertește orice dată într-un format ISO UTC și uman
-parse_time() {
-  python3 -c "
-import sys
-from dateutil import parser, tz
-
-tzinfos = {
-    'CST': tz.gettz('America/Chicago'),
-    'UTC': tz.gettz('UTC'),
-}
-
-text = sys.argv[1]
-dt = parser.parse(text, tzinfos=tzinfos)
-
-if dt.tzinfo is None:
-    dt = dt.replace(tzinfo=tz.gettz('UTC'))
-
-dt_utc = dt.astimezone(tz.tzutc())
-
-print(dt_utc.strftime('%Y-%m-%dT%H:%M:%S'))
-print(dt_utc.strftime('%d/%m/%Y %H:%M UTC'))
-" "$1"
-}
-
-read -p "Building (ex: mtz1): " BUILDING
-BUILDING=$(echo "$BUILDING" | tr '[:upper:]' '[:lower:]')
-ZONE=${BUILDING:0:3}
-
-read -p "Rack(s) (ex: 0301, 0302 0303): " RACK_INPUT
-IFS=', ' read -ra RACK_ARRAY <<< "$RACK_INPUT"
-
-VALID_RACKS=()
-for rack in "${RACK_ARRAY[@]}"; do
-    rack=$(echo "$rack" | xargs) # elimină spații
-    if [[ ${#rack} -ne 4 || ! "$rack" =~ ^[0-9]{4}$ ]]; then
-        echo "Rack number may be wrong: '$rack'. Must be exactly 4 digits."
-        exit 1
-    fi
-    VALID_RACKS+=("$rack")
-done
-
-RACK=$(IFS=, ; echo "${VALID_RACKS[*]}")
-
-read -p "Start time (ex: April 23, 2025 at 10:00 PM UTC): " START_RAW
-read -p "End time (ex: April 24, 2025 at 10:00 AM UTC): " END_RAW
-
-START_TIMES=($(parse_time "$START_RAW"))
-END_TIMES=($(parse_time "$END_RAW"))
-
-START_ISO=${START_TIMES[0]}
-START_HUMAN=${START_TIMES[1]}
-END_ISO=${END_TIMES[0]}
-
-# Calculează durata în minute
-DURATION_MINUTES=$(python3 -c "
-from datetime import datetime
-s = datetime.strptime('$START_ISO', '%Y-%m-%dT%H:%M:%S')
-e = datetime.strptime('$END_ISO', '%Y-%m-%dT%H:%M:%S')
-print(int((e - s).total_seconds() / 60))
-")
-
-echo ""
-echo "I will apply silence at $START_ISO for $DURATION_MINUTES minutes, is this correct? (yes/no)"
-read CONFIRM
-
-if [[ "$CONFIRM" != "yes" ]]; then
-    echo "Aborting script. Please recheck your time inputs."
-    exit 1
-fi
-
-read -p "Ticket number (ex: OCIGNOC-1595649): " TICKET
-
-echo ""
-echo "Generating and executing command:"
-CMD="silencer power -r $ZONE -b $BUILDING -R '$RACK' -S '$START_ISO' -d $DURATION_MINUTES -c $TICKET"
-echo "$CMD"
-
-eval $CMD
-
-echo ""
-echo "To view the silence run the below command:"
-echo "silencer view -r $ZONE "
