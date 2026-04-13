@@ -1,7 +1,7 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
-NAME   ?= state-helper
-SRC    ?= state-helper.sh
+NAME   ?= power_maintenance
+SRC    ?= power_maintenance
 
 .PHONY: install uninstall
 
